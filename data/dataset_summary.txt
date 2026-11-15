@@ -1,0 +1,69 @@
+================================================================================
+DATASET 2: AI & Academic Integrity Pandemonium
+Mathematical Focus: Graph theory of cheating networks
+================================================================================
+
+1. CHEATING NETWORK STATISTICS
+----------------------------------------
+Total Students: 200
+Total Cheating Links: 135
+Network Density: 0.0034
+Average Clustering: 0.1210
+Strongly Connected Components: 161
+Max In-Degree: 9
+Max Out-Degree: 9
+
+2. CHATGPT DETECTION FALSE POSITIVE RATES
+----------------------------------------
+Copyleaks: 2.67%
+GPTZero: 15.09%
+Originality.ai: 0.39%
+Turnitin: 5.98%
+Winston AI: 10.56%
+Overall false positive rate: 6.84%
+
+3. AI-GENERATED ESSAY SUBMISSION PATTERNS
+----------------------------------------
+Fall 2025: 22.89%
+Fall 2026: 49.62%
+Spring 2026: 33.23%
+Summer 2026: 41.85%
+Overall AI-generated rate: 40.27%
+
+4. PLAGIARISM ACCUSATION CASCADES
+----------------------------------------
+Total Cascades: 50
+Total Accusations: 439
+Average Cascade Size: 8.8
+Outcome Distribution:
+  Upheld: 160 (36.4%)
+  Dismissed: 143 (32.6%)
+  Pending: 82 (18.7%)
+  Appealed: 54 (12.3%)
+
+5. HONOR CODE VIOLATION TEMPORAL PATTERNS
+----------------------------------------
+Total Violations: 5095
+Date Range: 2025-01-01 00:00:00 to 2026-12-31 00:00:00
+Violation Type Distribution:
+  Plagiarism: 1502 (29.5%)
+  Cheating: 1303 (25.6%)
+  Unauthorized AI Use: 1017 (20.0%)
+  Fabrication: 776 (15.2%)
+  Facilitation: 497 (9.8%)
+
+6. AI-RESISTANT ASSIGNMENT DESIGN EFFICACY
+----------------------------------------
+Oral Defense: 89.08%
+Multi-Stage: 73.21%
+Scaffolded: 71.79%
+Process-Oriented: 70.49%
+Reflective: 65.76%
+Project-Based: 59.48%
+Peer-Review: 52.48%
+Traditional: 19.31%
+
+================================================================================
+All datasets have been saved to:
+C:\Users\Admin\Desktop\AI_Academic_Integrity_Dataset
+================================================================================
