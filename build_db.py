@@ -1,9 +1,19 @@
+"""
+build_db.py  -  rebuild academic_integrity.db from the CSVs in Data/.
+
+  python3 build_db.py            create the database: SQLFiles/schema.sql + raw CSV load
+  python3 build_db.py --run-all  also run the other scripts in SQLFiles/ in order
+                                 and write every result table to results.txt
+
+Uses only the Python standard library. Run it from the project folder.
+"""
 import csv, os, sqlite3, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DB = os.path.join(HERE, "academic_integrity.db")
-DATA = os.path.join(HERE, "data")
-TABLES = {  # csv file -> staging table (columns line up by position)
+SQL = os.path.join(HERE, "SQLFiles")
+DATA = os.path.join(HERE, "Data")
+TABLES = {
     "student_nodes": "stg_student_nodes",
     "cheating_network_edges": "stg_cheating_network_edges",
     "plagiarism_cascades": "stg_plagiarism_cascades",
@@ -14,13 +24,14 @@ TABLES = {  # csv file -> staging table (columns line up by position)
     "network_metrics": "stg_network_metrics",
     "false_positive_rates": "stg_false_positive_rates",
 }
-SCRIPTS = ["03_transform.sql", "04_network_analysis.sql", "05_cascade_analysis.sql",
-           "06_detector_audit.sql", "07_trends_and_design.sql",
-           "08_views_and_queries.sql", "09_query_plans.sql"]
+SCHEMA = "schema.sql"
+SCRIPTS = ["transform.sql", "network_analysis.sql", "cascade_analysis.sql",
+           "detector_audit.sql", "trends_and_design.sql",
+           "views_and_queries.sql", "query_plans.sql"]
 
 
 def read(name):
-    with open(os.path.join(HERE, name), encoding="utf-8") as f:
+    with open(os.path.join(SQL, name), encoding="utf-8") as f:
         return f.read()
 
 
@@ -62,7 +73,7 @@ def main():
     if os.path.exists(DB):
         os.remove(DB)
     con = sqlite3.connect(DB)
-    con.executescript(read("01_schema.sql"))
+    con.executescript(read(SCHEMA))
     for csv_name, tbl in TABLES.items():
         with open(os.path.join(DATA, csv_name + ".csv"), newline="", encoding="utf-8") as f:
             r = csv.reader(f)

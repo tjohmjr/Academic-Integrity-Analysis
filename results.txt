@@ -1,6 +1,6 @@
 
 ======================================================================
-03_transform.sql
+transform.sql
 ======================================================================
 +-----------------------+--------+--------+
 | tbl                   | staged | loaded |
@@ -17,25 +17,25 @@
 +----------+-------------------------------+------------------------------------------------------+------------+----------+---------------------+
 | check_id | table_name                    | check_name                                           | rows_found | severity | checked_at          |
 +----------+-------------------------------+------------------------------------------------------+------------+----------+---------------------+
-| 1        | stg_cheating_network_edges    | self-loop edges (source = target)                    | 0          | ERROR    | 2026-11-14 05:36:45 |
-| 2        | stg_cheating_network_edges    | edges referencing unknown students                   | 0          | ERROR    | 2026-11-14 05:36:45 |
-| 5        | stg_plagiarism_cascades       | accusations referencing unknown students             | 0          | ERROR    | 2026-11-14 05:36:45 |
-| 9        | stg_chatgpt_detection_results | duplicate submission_id                              | 0          | ERROR    | 2026-11-14 05:36:45 |
-| 13       | stg_student_nodes             | GPA outside 0-4                                      | 0          | ERROR    | 2026-11-14 05:36:45 |
-| 3        | stg_cheating_network_edges    | denormalized year/major disagrees with student_nodes | 0          | WARN     | 2026-11-14 05:36:45 |
-| 4        | stg_cheating_network_edges    | duplicate (source, target, edge_type)                | 0          | WARN     | 2026-11-14 05:36:45 |
-| 6        | stg_plagiarism_cascades       | student accused more than once in same cascade       | 13         | WARN     | 2026-11-14 05:36:45 |
-| 7        | stg_plagiarism_cascades       | self-accusations (student_id = accused_by)           | 2          | WARN     | 2026-11-14 05:36:45 |
-| 10       | stg_ai_essay_submissions      | non-integer word_count (rounded)                     | 3000       | WARN     | 2026-11-14 05:36:45 |
-| 11       | stg_ai_essay_submissions      | grade outside 0-100                                  | 0          | WARN     | 2026-11-14 05:36:45 |
-| 12       | stg_ai_essay_submissions      | similarity_score outside 0-100                       | 0          | WARN     | 2026-11-14 05:36:45 |
-| 14       | stg_honor_code_violations     | negative or missing investigation duration           | 0          | WARN     | 2026-11-14 05:36:45 |
-| 8        | stg_chatgpt_detection_results | boolean stored as text (True/False)                  | 5000       | INFO     | 2026-11-14 05:36:45 |
+| 1        | stg_cheating_network_edges    | self-loop edges (source = target)                    | 0          | ERROR    | 2026-11-16 22:04:32 |
+| 2        | stg_cheating_network_edges    | edges referencing unknown students                   | 0          | ERROR    | 2026-11-16 22:04:32 |
+| 5        | stg_plagiarism_cascades       | accusations referencing unknown students             | 0          | ERROR    | 2026-11-16 22:04:32 |
+| 9        | stg_chatgpt_detection_results | duplicate submission_id                              | 0          | ERROR    | 2026-11-16 22:04:32 |
+| 13       | stg_student_nodes             | GPA outside 0-4                                      | 0          | ERROR    | 2026-11-16 22:04:32 |
+| 3        | stg_cheating_network_edges    | denormalized year/major disagrees with student_nodes | 0          | WARN     | 2026-11-16 22:04:32 |
+| 4        | stg_cheating_network_edges    | duplicate (source, target, edge_type)                | 0          | WARN     | 2026-11-16 22:04:32 |
+| 6        | stg_plagiarism_cascades       | student accused more than once in same cascade       | 13         | WARN     | 2026-11-16 22:04:32 |
+| 7        | stg_plagiarism_cascades       | self-accusations (student_id = accused_by)           | 2          | WARN     | 2026-11-16 22:04:32 |
+| 10       | stg_ai_essay_submissions      | non-integer word_count (rounded)                     | 3000       | WARN     | 2026-11-16 22:04:32 |
+| 11       | stg_ai_essay_submissions      | grade outside 0-100                                  | 0          | WARN     | 2026-11-16 22:04:32 |
+| 12       | stg_ai_essay_submissions      | similarity_score outside 0-100                       | 0          | WARN     | 2026-11-16 22:04:32 |
+| 14       | stg_honor_code_violations     | negative or missing investigation duration           | 0          | WARN     | 2026-11-16 22:04:32 |
+| 8        | stg_chatgpt_detection_results | boolean stored as text (True/False)                  | 5000       | INFO     | 2026-11-16 22:04:32 |
 +----------+-------------------------------+------------------------------------------------------+------------+----------+---------------------+
 
 
 ======================================================================
-04_network_analysis.sql
+network_analysis.sql
 ======================================================================
 +-----------------------------------+----------+-----------+
 | metric                            | computed | published |
@@ -305,7 +305,7 @@
 
 
 ======================================================================
-05_cascade_analysis.sql
+cascade_analysis.sql
 ======================================================================
 +----------+-------------------+------------------+-----------------+-------------------+
 | cascades | total_accusations | avg_cascade_size | deepest_cascade | avg_duration_days |
@@ -490,7 +490,7 @@
 
 
 ======================================================================
-06_detector_audit.sql
+detector_audit.sql
 ======================================================================
 +----------------+------------------+-------------------+
 | tool           | computed_fpr_pct | published_fpr_pct |
@@ -646,7 +646,7 @@
 
 
 ======================================================================
-07_trends_and_design.sql
+trends_and_design.sql
 ======================================================================
 +-------------+-------------+--------------+--------+-----------+
 | semester    | submissions | ai_generated | pct_ai | pp_change |
@@ -835,7 +835,7 @@
 +-------------------------+------------+------------+
 | future_dated_violations | earliest   | latest     |
 +-------------------------+------------+------------+
-| 301                     | 2026-11-15 | 2026-12-31 |
+| 284                     | 2026-11-17 | 2026-12-31 |
 +-------------------------+------------+------------+
 
 +------------------+---------+--------------+----------------------+----------------+------------------+---------------+
@@ -903,7 +903,7 @@
 
 
 ======================================================================
-08_views_and_queries.sql
+views_and_queries.sql
 ======================================================================
 +------------+-------+------------+------+--------------+--------------+---------------+--------------------+------------+-----------+
 | student_id | major | class_year | gpa  | total_degree | ring_members | times_accused | upheld_accusations | risk_score | risk_tier |
@@ -987,7 +987,7 @@
 
 
 ======================================================================
-09_query_plans.sql
+query_plans.sql
 ======================================================================
 +----+--------+---------+-----------------------------------------------------------------------+
 | id | parent | notused | detail                                                                |
