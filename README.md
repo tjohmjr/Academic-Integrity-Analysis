@@ -2,7 +2,7 @@
 
 An end-to-end SQL project on a synthetic academic-integrity dataset: raw CSVs go into a staged SQLite warehouse, get cleaned and quality-checked, are analysed with pure SQL (graph analytics, statistical tests, window functions), and end up in a Power BI dashboard.
 
-![Dashboard](images/dashboard.png)
+![Dashboard](images/AIAVisual.png)
 
 **Dataset:** [Student Cheating Networks & AI Detection Data](https://www.kaggle.com/datasets/aliahmadmphil/student-cheating-networks-and-ai-detection-data) on Kaggle. The data is synthetic.
 
