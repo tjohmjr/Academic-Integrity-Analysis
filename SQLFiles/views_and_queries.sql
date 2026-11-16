@@ -1,3 +1,20 @@
+-- =====================================================================
+-- views_and_queries.sql  (SQLite version, run step 7 of 8)
+-- Reusable layer: a student risk-scoring view for dashboards, BI-ready
+-- views, and three ready-made queries that replace the MySQL stored
+-- procedures (SQLite has none): student report, shortest cheating path,
+-- and a detector evaluated at any threshold.
+-- Requires network_analysis.sql, cascade_analysis.sql and detector_audit.sql
+-- to have been run first (uses their derived tables).
+-- To use a query below, change the values on the line marked CHANGE ME.
+-- =====================================================================
+
+-- ---------------------------------------------------------------------
+-- 8.1 Student risk profile view (one row per student)
+-- Composite score = 40% network activity + 25% link confidence
+--                 + 20% size of ring + 15% upheld accusations,
+-- each converted to a 0-1 percentile so the parts are comparable.
+-- ---------------------------------------------------------------------
 DROP VIEW IF EXISTS v_student_risk;
 CREATE VIEW v_student_risk AS
 WITH ring_size AS (
@@ -29,7 +46,7 @@ scored AS (
   FROM base b
 )
 SELECT s.*,
-       NTILE(5) OVER (ORDER BY risk_score DESC) AS risk_quintile,
+       NTILE(5) OVER (ORDER BY risk_score DESC) AS risk_quintile,   -- 1 = highest risk
        CASE WHEN risk_score >= 70 THEN 'High'
             WHEN risk_score >= 40 THEN 'Medium'
             ELSE 'Low' END AS risk_tier
@@ -44,6 +61,9 @@ SELECT risk_tier, COUNT(*) AS students, ROUND(AVG(gpa), 2) AS avg_gpa,
 FROM v_student_risk GROUP BY risk_tier
 ORDER BY CASE risk_tier WHEN 'High' THEN 1 WHEN 'Medium' THEN 2 ELSE 3 END;
 
+-- ---------------------------------------------------------------------
+-- 8.2 Flat views for Power BI / Tableau
+-- ---------------------------------------------------------------------
 DROP VIEW IF EXISTS v_edges_enriched;
 CREATE VIEW v_edges_enriched AS
 SELECT e.edge_id, e.source_id, e.target_id, e.edge_type, e.confidence, e.observed_at,
@@ -74,28 +94,43 @@ SELECT strftime('%Y-%m-01', violation_date) AS month_start, violation_type, seve
 FROM honor_code_violations
 GROUP BY month_start, violation_type, severity;
 
+-- ---------------------------------------------------------------------
+-- 8.3 Student report (replaces sp_student_report)
+-- Change the student id on the CHANGE ME line, then run each query.
+-- ---------------------------------------------------------------------
+-- Profile + risk
 SELECT * FROM v_student_risk
-WHERE student_id = 'S102';  
+WHERE student_id = 'S102';   -- CHANGE ME
 
+-- Direct cheating links (both directions)
 SELECT 'outgoing' AS direction, target_id AS other_student, edge_type,
        ROUND(confidence, 3) AS confidence, observed_at
-FROM cheating_edges WHERE source_id = 'S102'
+FROM cheating_edges WHERE source_id = 'S102'   -- CHANGE ME
 UNION ALL
 SELECT 'incoming', source_id, edge_type, ROUND(confidence, 3), observed_at
-FROM cheating_edges WHERE target_id = 'S102' 
+FROM cheating_edges WHERE target_id = 'S102'   -- CHANGE ME
 ORDER BY observed_at;
 
+-- Accusations against and by this student
 SELECT 'accused' AS role, cascade_id, cascade_level, accused_by AS other_student,
        ROUND(evidence_strength, 3) AS evidence, outcome, sanction_level, accused_at
-FROM accusations WHERE student_id = 'S102'  
+FROM accusations WHERE student_id = 'S102'   -- CHANGE ME
 UNION ALL
 SELECT 'accuser', cascade_id, cascade_level, student_id,
        ROUND(evidence_strength, 3), outcome, sanction_level, accused_at
-FROM accusations WHERE accused_by = 'S102'  
+FROM accusations WHERE accused_by = 'S102'   -- CHANGE ME
 ORDER BY accused_at;
 
+-- ---------------------------------------------------------------------
+-- 8.4 Shortest cheating path between two students (replaces sp_shortest_path)
+-- Walks from the first student, only stepping to a neighbour that is one
+-- hop closer to the target (using the network_distance table from cascade_analysis.sql),
+-- so it explores shortest paths only. Returns one of them.
+-- Try S167 to S194 (the two most distant students, 12 hops)
+-- and S001 to S088 (different rings, so no path).
+-- ---------------------------------------------------------------------
 WITH RECURSIVE p (a, b) AS (
-  SELECT 'S167', 'S194'
+  SELECT 'S167', 'S194'   -- CHANGE ME (from, to)
 ),
 walk (node, hops, path) AS (
   SELECT p.a, 0, p.a FROM p
@@ -117,8 +152,12 @@ UNION ALL
 SELECT p.a, p.b, NULL, 'No path: these students are in different rings'
 FROM p WHERE NOT EXISTS (SELECT 1 FROM found);
 
+-- ---------------------------------------------------------------------
+-- 8.5 Evaluate any detector at any probability threshold
+-- (replaces sp_detector_at_threshold)
+-- ---------------------------------------------------------------------
 WITH p (tool, th) AS (
-  SELECT 'GPTZero', 0.30
+  SELECT 'GPTZero', 0.30   -- CHANGE ME (tool name, threshold 0 to 1)
 )
 SELECT p.tool AS tool, p.th AS threshold,
        SUM(d.actual_type = 'ai_generated'  AND d.detection_probability >= p.th) AS tp,

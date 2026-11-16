@@ -1,3 +1,15 @@
+-- =====================================================================
+-- network_analysis.sql  (SQLite version, run step 3 of 8)
+-- Graph analytics on the cheating network in pure SQL:
+-- validation of published metrics, centrality, reciprocity, connected
+-- components (rings), strongly connected components, clustering,
+-- triangles, cross-major brokers, and network growth over time.
+-- Note: SQLite divides integers as integers, so ratios use 1.0 * or 100.0 *
+-- =====================================================================
+
+-- ---------------------------------------------------------------------
+-- 4.0 Helper table: undirected version of the graph (each link both ways)
+-- ---------------------------------------------------------------------
 DROP TABLE IF EXISTS undirected_edges;
 CREATE TABLE undirected_edges (
   a TEXT, b TEXT,
@@ -8,6 +20,9 @@ SELECT source_id, target_id FROM cheating_edges
 UNION
 SELECT target_id, source_id FROM cheating_edges;
 
+-- ---------------------------------------------------------------------
+-- 4.1 Degree centrality per student (materialized for reuse)
+-- ---------------------------------------------------------------------
 DROP TABLE IF EXISTS student_degree;
 CREATE TABLE student_degree AS
 SELECT s.student_id, s.major, s.class_year, s.gpa,
@@ -23,6 +38,9 @@ LEFT JOIN (SELECT target_id, COUNT(*) AS in_deg, SUM(confidence) AS in_conf
            FROM cheating_edges GROUP BY target_id) i ON i.target_id = s.student_id;
 CREATE UNIQUE INDEX ux_student_degree ON student_degree (student_id);
 
+-- ---------------------------------------------------------------------
+-- 4.2 VALIDATION: recompute the published network_metrics.csv
+-- ---------------------------------------------------------------------
 SELECT 'num_nodes' AS metric,
        (SELECT COUNT(*) FROM students) AS computed,
        (SELECT CAST(num_nodes AS INTEGER) FROM c_network_metrics) AS published
@@ -41,6 +59,9 @@ UNION ALL
 SELECT 'max_out_degree', (SELECT MAX(out_degree) FROM student_degree),
        (SELECT CAST(max_out_degree AS INTEGER) FROM c_network_metrics);
 
+-- ---------------------------------------------------------------------
+-- 4.3 Most central students (window-function ranking)
+-- ---------------------------------------------------------------------
 SELECT student_id, major, class_year, gpa, out_degree, in_degree, total_degree,
        ROUND(weighted_degree, 3) AS weighted_degree,
        RANK() OVER (ORDER BY total_degree DESC) AS degree_rank,
@@ -53,11 +74,15 @@ WHERE total_degree > 0
 ORDER BY total_degree DESC, weighted_degree DESC
 LIMIT 15;
 
+-- Degree distribution (how concentrated is cheating activity?)
 SELECT total_degree, COUNT(*) AS students,
        ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (), 1) AS pct_students,
        SUM(COUNT(*)) OVER (ORDER BY total_degree DESC) AS cumulative_students
 FROM student_degree GROUP BY total_degree ORDER BY total_degree DESC;
 
+-- ---------------------------------------------------------------------
+-- 4.4 Reciprocity: mutual cheating pairs vs one-way copying
+-- ---------------------------------------------------------------------
 WITH pairs AS (
   SELECT DISTINCT MIN(source_id, target_id) AS s1, MAX(source_id, target_id) AS s2,
          EXISTS (SELECT 1 FROM cheating_edges r
@@ -70,6 +95,7 @@ SELECT COUNT(*)                         AS connected_pairs,
        ROUND(100.0 * SUM(mutual) / COUNT(*), 1) AS pct_pairs_mutual
 FROM pairs;
 
+-- Do mutual links tend to be a particular kind of cheating?
 SELECT e.edge_type,
        COUNT(*) AS edges,
        SUM(EXISTS (SELECT 1 FROM cheating_edges r
@@ -77,11 +103,15 @@ SELECT e.edge_type,
        ROUND(AVG(e.confidence), 3) AS avg_confidence
 FROM cheating_edges e GROUP BY e.edge_type ORDER BY edges DESC;
 
+-- ---------------------------------------------------------------------
+-- 4.5 Cheating rings = weakly connected components (recursive CTE)
+-- Each student ring id is the smallest student_id reachable from them.
+-- ---------------------------------------------------------------------
 DROP TABLE IF EXISTS student_ring;
 CREATE TABLE student_ring AS
 WITH RECURSIVE reach (origin, member) AS (
   SELECT student_id, student_id FROM students
-  UNION                                  
+  UNION                                  -- UNION (distinct) stops cycles
   SELECT r.origin, u.b
   FROM reach r JOIN undirected_edges u ON u.a = r.member
 )
@@ -90,6 +120,7 @@ FROM reach GROUP BY origin;
 CREATE UNIQUE INDEX ux_student_ring ON student_ring (student_id);
 CREATE INDEX ix_student_ring ON student_ring (ring_id);
 
+-- Ring leaderboard: size, density inside the ring, dominant cheating type
 WITH ring_edges AS (
   SELECT r.ring_id, e.source_id, e.target_id, e.edge_type, e.confidence
   FROM cheating_edges e JOIN student_ring r ON r.student_id = e.source_id
@@ -121,6 +152,7 @@ WHERE rs.members > 1
 ORDER BY rs.members DESC, links DESC
 LIMIT 15;
 
+-- Summary of component structure
 SELECT CASE WHEN members = 1 THEN 'Isolated (no links)'
             WHEN members = 2 THEN 'Pair'
             WHEN members <= 5 THEN 'Small ring (3-5)'
@@ -129,6 +161,10 @@ SELECT CASE WHEN members = 1 THEN 'Isolated (no links)'
 FROM (SELECT ring_id, COUNT(*) AS members FROM student_ring GROUP BY ring_id) x
 GROUP BY ring_size_band ORDER BY MIN(members);
 
+-- ---------------------------------------------------------------------
+-- 4.6 Strongly connected components (directed reachability both ways)
+-- Validates num_strongly_connected from the published metrics.
+-- ---------------------------------------------------------------------
 DROP TABLE IF EXISTS directed_reach;
 CREATE TABLE directed_reach AS
 WITH RECURSIVE reach (origin, member) AS (
@@ -144,7 +180,7 @@ DROP TABLE IF EXISTS student_scc;
 CREATE TABLE student_scc AS
 SELECT a.origin AS student_id, MIN(a.member) AS scc_id
 FROM directed_reach a
-JOIN directed_reach b ON b.origin = a.member AND b.member = a.origin
+JOIN directed_reach b ON b.origin = a.member AND b.member = a.origin  -- mutual reachability
 GROUP BY a.origin;
 CREATE UNIQUE INDEX ux_student_scc ON student_scc (student_id);
 
@@ -153,17 +189,22 @@ SELECT 'strongly connected components' AS metric,
        (SELECT CAST(num_strongly_connected AS INTEGER) FROM c_network_metrics) AS published
 FROM student_scc;
 
+-- Non-trivial SCCs = closed cheating loops (everyone can reach everyone)
 SELECT scc_id, COUNT(*) AS members,
        GROUP_CONCAT(student_id, ', ') AS students
 FROM (SELECT scc_id, student_id FROM student_scc ORDER BY student_id)
 GROUP BY scc_id HAVING COUNT(*) > 1
 ORDER BY members DESC;
 
+-- Reach / influence: how many students can each student answers flow to?
 SELECT origin AS student_id, COUNT(*) - 1 AS downstream_students,
        RANK() OVER (ORDER BY COUNT(*) DESC) AS influence_rank
 FROM directed_reach GROUP BY origin
 ORDER BY downstream_students DESC LIMIT 10;
 
+-- ---------------------------------------------------------------------
+-- 4.7 Triangles and clustering coefficient (undirected)
+-- ---------------------------------------------------------------------
 DROP TABLE IF EXISTS student_clustering;
 CREATE TABLE student_clustering AS
 SELECT d.student_id, d.distinct_neighbors AS k,
@@ -173,7 +214,7 @@ SELECT d.student_id, d.distinct_neighbors AS k,
        END AS local_clustering
 FROM student_degree d
 LEFT JOIN (
-  SELECT u1.a AS student_id, COUNT(*) / 2 AS tri   
+  SELECT u1.a AS student_id, COUNT(*) / 2 AS tri     -- each triangle seen twice per node
   FROM undirected_edges u1
   JOIN undirected_edges u2 ON u2.a = u1.a AND u2.b <> u1.b
   JOIN undirected_edges u3 ON u3.a = u1.b AND u3.b = u2.b
@@ -187,6 +228,7 @@ SELECT 'average clustering (undirected)' AS metric,
        (SELECT SUM(triangles) / 3 FROM student_clustering) AS total_triangles
 FROM student_clustering;
 
+-- The triangles themselves (tight 3-person cliques)
 SELECT DISTINCT u1.a AS student_1, u1.b AS student_2, u2.b AS student_3
 FROM undirected_edges u1
 JOIN undirected_edges u2 ON u2.a = u1.a AND u2.b > u1.b
@@ -194,6 +236,9 @@ JOIN undirected_edges u3 ON u3.a = u1.b AND u3.b = u2.b
 WHERE u1.a < u1.b
 ORDER BY student_1;
 
+-- ---------------------------------------------------------------------
+-- 4.8 Who cheats with whom? Cross-major and cross-year mixing
+-- ---------------------------------------------------------------------
 SELECT s1.major AS source_major, s2.major AS target_major, COUNT(*) AS links,
        ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (PARTITION BY s1.major), 1) AS pct_of_source_major
 FROM cheating_edges e
@@ -216,6 +261,7 @@ FROM cheating_edges e
 JOIN students s1 ON s1.student_id = e.source_id
 JOIN students s2 ON s2.student_id = e.target_id;
 
+-- Brokers: students whose neighbours span the most different majors
 SELECT u.a AS student_id, s.major AS own_major,
        COUNT(*) AS neighbors,
        COUNT(DISTINCT n.major) AS neighbor_majors,
@@ -228,6 +274,10 @@ HAVING COUNT(DISTINCT n.major) >= 3
 ORDER BY neighbor_majors DESC, neighbors DESC
 LIMIT 10;
 
+-- ---------------------------------------------------------------------
+-- 4.9 Does cheating-network position relate to GPA?
+-- (sample standard deviation computed from sums, SQLite has no STDDEV)
+-- ---------------------------------------------------------------------
 SELECT CASE WHEN total_degree = 0 THEN '0 links'
             WHEN total_degree <= 2 THEN '1-2 links'
             WHEN total_degree <= 4 THEN '3-4 links'
@@ -238,6 +288,9 @@ SELECT CASE WHEN total_degree = 0 THEN '0 links'
 FROM student_degree
 GROUP BY activity_band ORDER BY MIN(total_degree);
 
+-- ---------------------------------------------------------------------
+-- 4.10 Network growth over time
+-- ---------------------------------------------------------------------
 WITH monthly AS (
   SELECT strftime('%Y-%m', observed_at) AS month,
          COUNT(*) AS new_links,
@@ -250,6 +303,7 @@ SELECT month, new_links, active_sources,
        new_links - LAG(new_links) OVER (ORDER BY month) AS change_vs_prior_month
 FROM monthly ORDER BY month;
 
+-- When did each large ring form, and how fast did it grow?
 SELECT r.ring_id,
        COUNT(*) AS links,
        MIN(e.observed_at) AS first_link,

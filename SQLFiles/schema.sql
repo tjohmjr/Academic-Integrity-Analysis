@@ -1,3 +1,15 @@
+-- =====================================================================
+-- schema.sql  (SQLite version, run step 1 of 8)
+-- Academic Integrity Analytics: Cheating Networks and AI Detector Audit
+-- Creates the raw staging tables and the typed core tables.
+-- Safe to re-run: staging tables are kept (they hold the loaded CSV data),
+-- core tables are dropped and recreated.
+-- =====================================================================
+
+-- ---------------------------------------------------------------------
+-- STAGING LAYER: every column is TEXT so the raw CSVs always load.
+-- Types, booleans and blanks are cleaned in transform.sql.
+-- ---------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS stg_student_nodes (
   student_id TEXT, year TEXT, major TEXT, gpa TEXT
 );
@@ -36,6 +48,7 @@ CREATE TABLE IF NOT EXISTS stg_assignment_design_efficacy (
   implementation_cost TEXT, faculty_workload TEXT, class_size TEXT, subject TEXT
 );
 
+-- Published reference numbers, kept so our SQL can be validated against them
 CREATE TABLE IF NOT EXISTS stg_network_metrics (
   num_nodes TEXT, num_edges TEXT, density TEXT, avg_clustering TEXT,
   num_strongly_connected TEXT, max_in_degree TEXT, max_out_degree TEXT,
@@ -46,6 +59,10 @@ CREATE TABLE IF NOT EXISTS stg_false_positive_rates (
   tool TEXT, detected_as_ai TEXT
 );
 
+-- ---------------------------------------------------------------------
+-- CORE LAYER (typed, keyed, indexed)
+-- Booleans are stored as 0/1, timestamps as ISO-8601 text.
+-- ---------------------------------------------------------------------
 DROP TABLE IF EXISTS accusations;
 DROP TABLE IF EXISTS cheating_edges;
 DROP TABLE IF EXISTS students;
@@ -64,6 +81,7 @@ CREATE TABLE students (
 );
 CREATE INDEX ix_students_major ON students (major);
 
+-- Directed edge: source -> target (source shared with / was copied by target)
 CREATE TABLE cheating_edges (
   edge_id     INTEGER PRIMARY KEY AUTOINCREMENT,
   source_id   TEXT NOT NULL REFERENCES students(student_id),
@@ -93,6 +111,7 @@ CREATE INDEX ix_acc_cascade ON accusations (cascade_id, cascade_level);
 CREATE INDEX ix_acc_student ON accusations (student_id);
 CREATE INDEX ix_acc_accuser ON accusations (accused_by);
 
+-- Lookup giving sanctions an order so we can measure escalation
 CREATE TABLE sanction_scale (
   sanction_level TEXT PRIMARY KEY,
   severity_rank  INTEGER NOT NULL
@@ -156,6 +175,7 @@ CREATE TABLE assignment_design (
 );
 CREATE INDEX ix_design_type ON assignment_design (design_type);
 
+-- Every rule the cleaning step applies is logged here (rows affected)
 CREATE TABLE data_quality_log (
   check_id    INTEGER PRIMARY KEY AUTOINCREMENT,
   table_name  TEXT,

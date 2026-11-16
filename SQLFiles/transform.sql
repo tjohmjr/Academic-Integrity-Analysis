@@ -1,3 +1,14 @@
+-- =====================================================================
+-- transform.sql  (SQLite version, run step 2 of 8)
+-- Staging -> core. Cleans blanks, converts True/False text to 0/1,
+-- rounds float word counts, and logs every data-quality issue it finds
+-- to data_quality_log.
+--
+-- Cleaning layer: one c_* view per staging table. Each view trims
+-- whitespace and turns empty strings into NULL (replaces the MySQL
+-- clean() function, since SQLite has no user-defined SQL functions).
+-- =====================================================================
+
 DROP VIEW IF EXISTS c_student_nodes;
 CREATE VIEW c_student_nodes AS
 SELECT NULLIF(TRIM(student_id), '') AS student_id, NULLIF(TRIM(year), '') AS year,
@@ -77,6 +88,7 @@ CREATE VIEW c_false_positive_rates AS
 SELECT NULLIF(TRIM(tool), '') AS tool, NULLIF(TRIM(detected_as_ai), '') AS detected_as_ai
 FROM stg_false_positive_rates;
 
+-- Clear the core tables (children first) so this script can be re-run
 DELETE FROM data_quality_log;
 DELETE FROM accusations;
 DELETE FROM cheating_edges;
@@ -87,6 +99,9 @@ DELETE FROM honor_code_violations;
 DELETE FROM assignment_design;
 DELETE FROM sanction_scale;
 
+-- ---------------------------------------------------------------------
+-- Data-quality checks on staging (logged before loading)
+-- ---------------------------------------------------------------------
 INSERT INTO data_quality_log (table_name, check_name, rows_found, severity)
 SELECT 'stg_cheating_network_edges', 'self-loop edges (source = target)', COUNT(*), 'ERROR'
 FROM c_edges WHERE source = target
@@ -140,10 +155,14 @@ SELECT 'stg_honor_code_violations', 'negative or missing investigation duration'
 FROM c_violations
 WHERE investigation_duration IS NULL OR CAST(investigation_duration AS INTEGER) < 0;
 
+-- ---------------------------------------------------------------------
+-- Load core tables
+-- ---------------------------------------------------------------------
 INSERT INTO students (student_id, class_year, major, gpa)
 SELECT student_id, CAST(year AS INTEGER), major, ROUND(CAST(gpa AS REAL), 2)
 FROM c_student_nodes;
 
+-- INSERT OR IGNORE drops any duplicates already counted in the log
 INSERT OR IGNORE INTO cheating_edges (source_id, target_id, edge_type, confidence, observed_at)
 SELECT source, target, edge_type, CAST(confidence AS REAL), ts
 FROM c_edges
@@ -194,6 +213,7 @@ SELECT design_type, CAST(efficacy_score AS REAL), CAST(student_engagement AS REA
        CAST(class_size AS INTEGER), subject
 FROM c_design;
 
+-- Reconciliation: staging rows vs core rows
 SELECT 'students' AS tbl, (SELECT COUNT(*) FROM stg_student_nodes) AS staged, (SELECT COUNT(*) FROM students) AS loaded
 UNION ALL SELECT 'cheating_edges', (SELECT COUNT(*) FROM stg_cheating_network_edges), (SELECT COUNT(*) FROM cheating_edges)
 UNION ALL SELECT 'accusations', (SELECT COUNT(*) FROM stg_plagiarism_cascades), (SELECT COUNT(*) FROM accusations)
